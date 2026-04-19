@@ -9,7 +9,7 @@ import { api } from '../../api'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-interface SnappedStop {
+export interface SnappedStop {
   stop_id: string
   name: string
   lat: number
