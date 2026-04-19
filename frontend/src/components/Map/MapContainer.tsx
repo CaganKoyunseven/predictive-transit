@@ -10,6 +10,10 @@ import { useMap } from 'react-leaflet'
 import SearchButton from '../Search/SearchButton'
 import SearchOverlay from '../Search/SearchOverlay'
 import type { EnrichedStop } from '../../hooks/usePlaceSearch'
+import LocationButton from './LocationButton'
+import { useGeolocation } from '../../hooks/useGeolocation'
+import type { GeoLocation } from '../../hooks/useGeolocation'
+import { haversineKm } from '../../hooks/usePlaceSearch'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -48,19 +52,23 @@ const BUS_REFRESH_MS = 30_000
 
 // ── Stop icon ─────────────────────────────────────────────────────────────────
 
-function makeStopIcon(color: string): L.DivIcon {
-  const size = 7
+function makeStopIcon(color: string, nearest = false): L.DivIcon {
+  const r = nearest ? 10 : 7
+  const border = nearest ? '3px solid #fff' : '2px solid #fff'
+  const shadow = nearest
+    ? '0 0 0 4px rgba(37,99,235,0.35), 0 2px 8px rgba(0,0,0,0.4)'
+    : '0 1px 4px rgba(0,0,0,0.4)'
   return L.divIcon({
     className: '',
     html: `<div style="
-      width:${size * 2}px;height:${size * 2}px;border-radius:50%;
-      background:${color};border:2px solid #fff;
-      box-shadow:0 1px 4px rgba(0,0,0,0.4);
+      width:${r * 2}px;height:${r * 2}px;border-radius:50%;
+      background:${color};border:${border};
+      box-shadow:${shadow};
       cursor:pointer;pointer-events:all;
     "></div>`,
-    iconSize: [size * 2, size * 2],
-    iconAnchor: [size, size],
-    tooltipAnchor: [size + 2, -size],
+    iconSize: [r * 2, r * 2],
+    iconAnchor: [r, r],
+    tooltipAnchor: [r + 2, -r],
   })
 }
 
@@ -69,6 +77,7 @@ function makeStopIcon(color: string): L.DivIcon {
 interface StopMarkerProps {
   snapped: SnappedStop
   color: string
+  isNearest: boolean
   onStopClick: (stop: Stop) => void
 }
 
@@ -80,10 +89,10 @@ interface UpcomingBus {
   delay_min: number
 }
 
-function StopMarker({ snapped, color, onStopClick }: StopMarkerProps) {
+function StopMarker({ snapped, color, isNearest, onStopClick }: StopMarkerProps) {
   const [upcoming, setUpcoming] = useState<UpcomingBus[] | null>(null)
   const markerRef = useRef<L.Marker>(null)
-  const icon = makeStopIcon(color)
+  const icon = makeStopIcon(color, isNearest)
 
   const stop: Stop = {
     stop_id: snapped.stop_id,
@@ -116,7 +125,7 @@ function StopMarker({ snapped, color, onStopClick }: StopMarkerProps) {
       }}
       zIndexOffset={snapped.is_terminal ? 100 : 0}
     >
-      <Tooltip direction="top" offset={[0, -8]}>
+      <Tooltip direction="top" offset={[0, -8]} permanent={isNearest}>
         <div style={{ fontFamily: 'sans-serif', minWidth: 150 }}>
           <div style={{ fontWeight: 700, fontSize: 12, marginBottom: upcoming?.length ? 5 : 0 }}>
             {snapped.name}
@@ -160,6 +169,10 @@ export default function MapContainer({ onStopSelect }: Props) {
   const debouncingRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [searchOpen, setSearchOpen] = useState(false)
   const [flyTarget, setFlyTarget] = useState<[number, number] | null>(null)
+  const [userLocation, setUserLocation] = useState<GeoLocation | null>(null)
+  const [nearestStopId, setNearestStopId] = useState<string | null>(null)
+  const [toastMsg, setToastMsg] = useState<string | null>(null)
+  const { loading: geoLoading, getLocation } = useGeolocation()
 
   const snappedMap = new Map<string, SnappedStop>()
   const colorMap = new Map<string, string>()
@@ -173,6 +186,17 @@ export default function MapContainer({ onStopSelect }: Props) {
   const allStops: EnrichedStop[] = routes.flatMap(route =>
     route.stops.map(s => ({ ...s, color: route.color }))
   )
+
+  useEffect(() => {
+    if (!userLocation || allStops.length === 0) return
+    let bestId: string | null = null
+    let bestDist = Infinity
+    for (const s of allStops) {
+      const d = haversineKm(userLocation.lat, userLocation.lng, s.lat, s.lng)
+      if (d < bestDist) { bestDist = d; bestId = s.stop_id }
+    }
+    setNearestStopId(bestDist <= 2 ? bestId : null)
+  }, [userLocation, allStops])
 
   useEffect(() => {
     api.get<{ routes: RouteShape[] }>('/routes/all/shapes')
@@ -193,6 +217,17 @@ export default function MapContainer({ onStopSelect }: Props) {
     if (debouncingRef.current) return
     debouncingRef.current = setTimeout(() => { debouncingRef.current = null }, DEBOUNCE_MS)
     onStopSelect(stop)
+  }
+
+  async function handleLocation() {
+    try {
+      const loc = await getLocation()
+      setUserLocation(loc)
+      setFlyTarget([loc.lat, loc.lng])
+    } catch (msg) {
+      setToastMsg(msg as string)
+      setTimeout(() => setToastMsg(null), 3000)
+    }
   }
 
   function handleSearchSelect(enriched: EnrichedStop) {
@@ -223,6 +258,7 @@ export default function MapContainer({ onStopSelect }: Props) {
           key={snapped.stop_id}
           snapped={snapped}
           color={route.color}
+          isNearest={snapped.stop_id === nearestStopId}
           onStopClick={handleStopClick}
         />
       )
@@ -265,9 +301,32 @@ export default function MapContainer({ onStopSelect }: Props) {
         ))}
 
         <MapFlyTo target={flyTarget} />
+        {userLocation && (
+          <Marker
+            position={[userLocation.lat, userLocation.lng]}
+            icon={L.divIcon({
+              className: '',
+              html: `<div style="
+                width:16px;height:16px;border-radius:50%;
+                background:#2563EB;border:3px solid #fff;
+                box-shadow:0 0 0 4px rgba(37,99,235,0.25);
+              "></div>`,
+              iconSize: [16, 16],
+              iconAnchor: [8, 8],
+            })}
+            zIndexOffset={500}
+          />
+        )}
       </LeafletMap>
 
       <SearchButton onClick={() => setSearchOpen(true)} />
+      <LocationButton loading={geoLoading} onClick={handleLocation} />
+
+      {toastMsg && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[1100] bg-gray-800 text-white text-sm px-4 py-2 rounded-full shadow-lg">
+          {toastMsg}
+        </div>
+      )}
 
       <SearchOverlay
         open={searchOpen}
