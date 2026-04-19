@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import L from 'leaflet'
 import { MapContainer as LeafletMap, Marker, Polyline, TileLayer, Tooltip } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -190,6 +190,27 @@ export default function MapContainer({ onStopSelect }: Props) {
     route.stops.map(s => ({ ...s, color: route.color }))
   )
 
+  const lineOpacity = useMemo(() => {
+    const map = new Map<string, number>()
+    const grouped = new Map<string, { delaySum: number; occSum: number; count: number }>()
+    for (const bus of buses) {
+      const g = grouped.get(bus.line_id) ?? { delaySum: 0, occSum: 0, count: 0 }
+      g.delaySum += bus.delay_min
+      g.occSum += bus.occupancy_pct
+      g.count += 1
+      grouped.set(bus.line_id, g)
+    }
+    for (const [lineId, g] of grouped) {
+      const avgDelay = g.delaySum / g.count
+      const avgOcc = g.occSum / g.count
+      const delayNorm = Math.min(1, Math.max(0, avgDelay / 10))
+      const occNorm = Math.min(1, Math.max(0, avgOcc / 100))
+      const score = Math.max(delayNorm, occNorm)
+      map.set(lineId, 0.3 + score * 0.7)
+    }
+    return map
+  }, [buses])
+
   useEffect(() => {
     if (!userLocation || allStops.length === 0) return
     let bestId: string | null = null
@@ -289,7 +310,7 @@ export default function MapContainer({ onStopSelect }: Props) {
               positions={route.coordinates}
               pathOptions={{
                 color: route.color,
-                opacity: isActive ? 1.0 : 0.65,
+                opacity: isActive ? 1.0 : (lineOpacity.get(route.line_id) ?? 0.65),
                 weight: isActive ? 5 : 3,
               }}
               eventHandlers={{ click: () => setActiveLineId(prev => prev === route.line_id ? null : route.line_id) }}
