@@ -19,7 +19,7 @@ const SIVAS_VIEWBOX = '36.8,39.6,37.2,39.85'
 const MAX_DIST_KM = 2
 const NOMINATIM_TIMEOUT_MS = 5000
 
-function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371
   const dLat = (lat2 - lat1) * Math.PI / 180
   const dLng = (lng2 - lng1) * Math.PI / 180
