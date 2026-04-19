@@ -34,7 +34,8 @@ Thumbs.db
 .env.*
 
 # Internal tooling
-docs/superpowers/
+docs/superpowers/skills/
+docs/superpowers/plans/
 
 # Logs
 *.log
