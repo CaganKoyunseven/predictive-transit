@@ -14,6 +14,8 @@ import LocationButton from './LocationButton'
 import { useGeolocation } from '../../hooks/useGeolocation'
 import type { GeoLocation } from '../../hooks/useGeolocation'
 import { haversineKm } from '../../hooks/usePlaceSearch'
+import WeatherBadge from './WeatherBadge'
+import { useWeather } from '../../hooks/useWeather'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -173,6 +175,7 @@ export default function MapContainer({ onStopSelect }: Props) {
   const [nearestStopId, setNearestStopId] = useState<string | null>(null)
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const { loading: geoLoading, getLocation } = useGeolocation()
+  const weather = useWeather()
 
   const snappedMap = new Map<string, SnappedStop>()
   const colorMap = new Map<string, string>()
@@ -320,6 +323,7 @@ export default function MapContainer({ onStopSelect }: Props) {
       </LeafletMap>
 
       <SearchButton onClick={() => setSearchOpen(true)} />
+      {weather && <WeatherBadge weather={weather} />}
       <LocationButton loading={geoLoading} onClick={handleLocation} />
 
       {toastMsg && (
