@@ -6,6 +6,10 @@ import type { Stop } from './BusStopMarker'
 import BusMarker from './BusMarker'
 import type { BusPosition } from './BusMarker'
 import { api } from '../../api'
+import { useMap } from 'react-leaflet'
+import SearchButton from '../Search/SearchButton'
+import SearchOverlay from '../Search/SearchOverlay'
+import type { EnrichedStop } from '../../hooks/usePlaceSearch'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -137,6 +141,16 @@ function StopMarker({ snapped, color, onStopClick }: StopMarkerProps) {
   )
 }
 
+// ── MapFlyTo ──────────────────────────────────────────────────────────────────
+
+function MapFlyTo({ target }: { target: [number, number] | null }) {
+  const map = useMap()
+  useEffect(() => {
+    if (target) map.flyTo(target, 16, { duration: 1 })
+  }, [target, map])
+  return null
+}
+
 // ── MapContainer ──────────────────────────────────────────────────────────────
 
 export default function MapContainer({ onStopSelect }: Props) {
@@ -144,6 +158,8 @@ export default function MapContainer({ onStopSelect }: Props) {
   const [buses, setBuses] = useState<BusPosition[]>([])
   const [activeLineId, setActiveLineId] = useState<string | null>(null)
   const debouncingRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [flyTarget, setFlyTarget] = useState<[number, number] | null>(null)
 
   const snappedMap = new Map<string, SnappedStop>()
   const colorMap = new Map<string, string>()
@@ -153,6 +169,10 @@ export default function MapContainer({ onStopSelect }: Props) {
       colorMap.set(s.stop_id, route.color)
     }
   }
+
+  const allStops: EnrichedStop[] = routes.flatMap(route =>
+    route.stops.map(s => ({ ...s, color: route.color }))
+  )
 
   useEffect(() => {
     api.get<{ routes: RouteShape[] }>('/routes/all/shapes')
@@ -175,6 +195,22 @@ export default function MapContainer({ onStopSelect }: Props) {
     onStopSelect(stop)
   }
 
+  function handleSearchSelect(enriched: EnrichedStop) {
+    setFlyTarget([enriched.lat, enriched.lng])
+    const stop: Stop = {
+      stop_id: enriched.stop_id,
+      line_id: enriched.line_id,
+      line_name: enriched.line_name,
+      stop_sequence: enriched.stop_sequence,
+      latitude: enriched.lat,
+      longitude: enriched.lng,
+      stop_type: enriched.stop_type,
+      is_terminal: enriched.is_terminal,
+      is_transfer_hub: enriched.is_transfer_hub,
+    }
+    onStopSelect(stop)
+  }
+
   // Deduplicate stops (a stop_id may appear in multiple routes)
   const renderedStopIds = new Set<string>()
   const stopMarkers: React.ReactElement[] = []
@@ -194,38 +230,51 @@ export default function MapContainer({ onStopSelect }: Props) {
   }
 
   return (
-    <LeafletMap
-      center={SIVAS_CENTER}
-      zoom={13}
-      className="h-full w-full"
-      zoomControl={true}
-    >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+    <div className="relative h-full w-full">
+      <LeafletMap
+        center={SIVAS_CENTER}
+        zoom={13}
+        className="h-full w-full"
+        zoomControl={true}
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+
+        {routes.map(route => {
+          const isActive = activeLineId === route.line_id
+          return (
+            <Polyline
+              key={route.line_id}
+              positions={route.coordinates}
+              pathOptions={{
+                color: route.color,
+                opacity: isActive ? 1.0 : 0.65,
+                weight: isActive ? 5 : 3,
+              }}
+              eventHandlers={{ click: () => setActiveLineId(prev => prev === route.line_id ? null : route.line_id) }}
+            />
+          )
+        })}
+
+        {stopMarkers}
+
+        {buses.map(bus => (
+          <BusMarker key={bus.bus_id} bus={bus} />
+        ))}
+
+        <MapFlyTo target={flyTarget} />
+      </LeafletMap>
+
+      <SearchButton onClick={() => setSearchOpen(true)} />
+
+      <SearchOverlay
+        open={searchOpen}
+        stops={allStops}
+        onClose={() => setSearchOpen(false)}
+        onSelect={handleSearchSelect}
       />
-
-      {routes.map(route => {
-        const isActive = activeLineId === route.line_id
-        return (
-          <Polyline
-            key={route.line_id}
-            positions={route.coordinates}
-            pathOptions={{
-              color: route.color,
-              opacity: isActive ? 1.0 : 0.65,
-              weight: isActive ? 5 : 3,
-            }}
-            eventHandlers={{ click: () => setActiveLineId(prev => prev === route.line_id ? null : route.line_id) }}
-          />
-        )
-      })}
-
-      {stopMarkers}
-
-      {buses.map(bus => (
-        <BusMarker key={bus.bus_id} bus={bus} />
-      ))}
-    </LeafletMap>
+    </div>
   )
 }
