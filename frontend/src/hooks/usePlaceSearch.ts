@@ -6,7 +6,13 @@ export interface EnrichedStop extends SnappedStop {
   color: string
 }
 
-export interface SearchResult {
+export interface StopResult {
+  type: 'stop'
+  stop: EnrichedStop
+}
+
+export interface PlaceResult {
+  type: 'place'
   place_name: string
   line_id: string
   line_name: string
@@ -14,6 +20,8 @@ export interface SearchResult {
   stop_name: string
   stop: EnrichedStop
 }
+
+export type CombinedResult = StopResult | PlaceResult
 
 const SIVAS_VIEWBOX = '36.8,39.6,37.2,39.85'
 const MAX_DIST_KM = 2
@@ -37,6 +45,21 @@ function nearestStop(lat: number, lng: number, stops: EnrichedStop[]): EnrichedS
     if (d < bestDist) { bestDist = d; best = s }
   }
   return bestDist <= MAX_DIST_KM ? best : null
+}
+
+function matchStops(query: string, stops: EnrichedStop[]): StopResult[] {
+  const q = query.toLowerCase().trim()
+  const seen = new Set<string>()
+  const results: StopResult[] = []
+  for (const s of stops) {
+    if (seen.has(s.stop_id)) continue
+    if (s.name.toLowerCase().includes(q)) {
+      seen.add(s.stop_id)
+      results.push({ type: 'stop', stop: s })
+      if (results.length === 3) break
+    }
+  }
+  return results
 }
 
 function matchPredefined(query: string): Array<{ name: string; lat: number; lng: number }> {
@@ -73,7 +96,7 @@ async function nominatimSearch(query: string): Promise<{ lat: number; lng: numbe
 
 export function usePlaceSearch(stops: EnrichedStop[]) {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<SearchResult[]>([])
+  const [results, setResults] = useState<CombinedResult[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -88,6 +111,12 @@ export function usePlaceSearch(stops: EnrichedStop[]) {
       return
     }
 
+    const stopMatches = matchStops(q, stops)
+    if (stopMatches.length > 0) {
+      setResults(stopMatches)
+      setError(null)
+    }
+
     debounceRef.current = setTimeout(async () => {
       setLoading(true)
       setError(null)
@@ -97,20 +126,14 @@ export function usePlaceSearch(stops: EnrichedStop[]) {
         ? predefined
         : await nominatimSearch(q).then(r => (r ? [{ name: q, ...r }] : []))
 
-      if (candidates.length === 0) {
-        setResults([])
-        setError('Yer bulunamadı, haritadan durak seçebilirsiniz')
-        setLoading(false)
-        return
-      }
-
       const seen = new Set<string>()
-      const found: SearchResult[] = []
+      const placeMatches: PlaceResult[] = []
       for (const c of candidates) {
         const s = nearestStop(c.lat, c.lng, stops)
         if (!s || seen.has(s.stop_id)) continue
         seen.add(s.stop_id)
-        found.push({
+        placeMatches.push({
+          type: 'place',
           place_name: c.name,
           line_id: s.line_id,
           line_name: s.line_name,
@@ -118,14 +141,17 @@ export function usePlaceSearch(stops: EnrichedStop[]) {
           stop_name: s.name,
           stop: s,
         })
-        if (found.length === 3) break
+        if (placeMatches.length === 3) break
       }
 
-      if (found.length === 0) {
+      const currentStopMatches = matchStops(q, stops)
+      const combined = [...currentStopMatches, ...placeMatches].slice(0, 5)
+
+      if (combined.length === 0) {
         setResults([])
-        setError('Bu konuma yakın hat bulunamadı')
+        setError('Yer bulunamadı, haritadan durak seçebilirsiniz')
       } else {
-        setResults(found)
+        setResults(combined)
         setError(null)
       }
       setLoading(false)
