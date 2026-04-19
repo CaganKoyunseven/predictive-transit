@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import type { EnrichedStop, SearchResult } from '../../hooks/usePlaceSearch'
+import type { StopResult, PlaceResult, EnrichedStop } from '../../hooks/usePlaceSearch'
 import { usePlaceSearch } from '../../hooks/usePlaceSearch'
 
 interface Props {
@@ -65,16 +65,36 @@ export default function SearchOverlay({ open, stops, onClose, onSelect }: Props)
           {!loading && error && (
             <div className="px-4 py-3 text-sm text-gray-500">{error}</div>
           )}
-          {!loading && !error && results.map((r, i) => (
-            <ResultRow key={i} result={r} onSelect={() => { onSelect(r.stop); onClose() }} />
-          ))}
+          {!loading && !error && results.map((r, i) =>
+            r.type === 'stop'
+              ? <StopResultRow key={i} result={r} onSelect={() => { onSelect(r.stop); onClose() }} />
+              : <PlaceResultRow key={i} result={r} onSelect={() => { onSelect(r.stop); onClose() }} />
+          )}
         </div>
       </div>
     </div>
   )
 }
 
-function ResultRow({ result, onSelect }: { result: SearchResult; onSelect: () => void }) {
+function StopResultRow({ result, onSelect }: { result: StopResult; onSelect: () => void }) {
+  return (
+    <button
+      onClick={onSelect}
+      className="w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-50 last:border-0 flex items-center gap-3"
+    >
+      <span className="text-base shrink-0">📍</span>
+      <span className="flex-1 text-sm font-medium text-gray-800">{result.stop.name}</span>
+      <span
+        className="shrink-0 text-xs font-bold text-white px-2 py-0.5 rounded"
+        style={{ background: result.stop.color }}
+      >
+        {result.stop.line_id}
+      </span>
+    </button>
+  )
+}
+
+function PlaceResultRow({ result, onSelect }: { result: PlaceResult; onSelect: () => void }) {
   return (
     <button
       onClick={onSelect}
@@ -87,9 +107,9 @@ function ResultRow({ result, onSelect }: { result: SearchResult; onSelect: () =>
         {result.line_id}
       </span>
       <span className="text-sm text-gray-800 leading-snug">
-        <span className="font-medium">{result.line_id} hattına bin</span>
+        <span className="font-medium">Take line {result.line_id}</span>
         <span className="text-gray-400 mx-1">·</span>
-        <span className="text-gray-600">{result.stop_name} durağında in</span>
+        <span className="text-gray-600">get off at {result.stop_name}</span>
       </span>
     </button>
   )
