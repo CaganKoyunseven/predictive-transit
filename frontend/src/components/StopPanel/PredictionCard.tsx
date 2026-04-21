@@ -1,8 +1,10 @@
+import { useEffect, useState } from 'react'
 import type { PredictResponse } from '../../hooks/usePrediction'
 import type { Stop } from '../Map/BusStopMarker'
 import CrowdBar from './CrowdBar'
 import CrowdConfirmButtons from './CrowdConfirmButtons'
 import AccessibilityAlert from '../Modals/AccessibilityAlert'
+import { api } from '../../api'
 
 interface Props {
   stop: Stop
@@ -27,6 +29,21 @@ export default function PredictionCard({
   onTripComplete,
   onBeatTheBus,
 }: Props) {
+  const [accessibilityWarning, setAccessibilityWarning] = useState(false)
+
+  useEffect(() => {
+    if (!userId) return
+    api.get<{ accessibility_warning: boolean }>('/accessibility/warning', {
+      params: {
+        user_id: userId,
+        stop_id: stop.stop_id,
+        predicted_passengers_waiting: prediction.predicted_passengers_waiting,
+      },
+    })
+      .then(r => setAccessibilityWarning(r.data.accessibility_warning))
+      .catch(() => {})
+  }, [userId, stop.stop_id, prediction.predicted_passengers_waiting])
+
   return (
     <div className="bg-white rounded-t-2xl shadow-xl p-4 flex flex-col gap-4">
       <div className="flex justify-between items-start">
@@ -52,7 +69,7 @@ export default function PredictionCard({
 
       <CrowdBar passengers={prediction.predicted_passengers_waiting} />
 
-      {prediction.accessibility_warning && (
+      {accessibilityWarning && (
         <AccessibilityAlert onWaitNext={onClose} />
       )}
 

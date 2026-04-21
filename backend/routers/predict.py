@@ -58,9 +58,7 @@ def predict(req: PredictRequest, request: Request):
     else:
         confidence = "low"
 
-    # Accessibility warning fires when bus is above 80 % capacity (>= 48 passengers)
-    warning_threshold = BUS_CAPACITY * ACCESSIBILITY_THRESHOLD
-    accessibility_warning = predicted_crowd >= warning_threshold
+    accessibility_warning = False
 
     # Step 3: predict crowding label using classification model
     if all([crowding_model, crowding_features, crowding_le]):

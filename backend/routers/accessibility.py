@@ -35,8 +35,8 @@ def accessibility_warning(
         exp = exp.replace(tzinfo=timezone.utc)
     stroller_is_active = bool(exp and exp > now)
 
-    # User qualifies for warning if they are disabled OR carrying a stroller right now
-    is_eligible = user.is_disabled or stroller_is_active
+    # User qualifies for warning if they are disabled OR have stroller profile AND active session
+    is_eligible = user.is_disabled or (user.has_stroller_profile and stroller_is_active)
     warning = is_eligible and predicted_passengers_waiting >= WARNING_THRESHOLD
 
     occupancy_pct = round(predicted_passengers_waiting / BUS_CAPACITY * 100, 1)

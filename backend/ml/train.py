@@ -15,7 +15,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from pathlib import Path
 from sklearn.preprocessing import LabelEncoder
-from sklearn.model_selection import TimeSeriesSplit, StratifiedKFold
+from sklearn.model_selection import TimeSeriesSplit, StratifiedKFold, KFold
 from sklearn.metrics import mean_absolute_error, accuracy_score, classification_report as cls_report
 from xgboost import XGBRegressor, XGBClassifier
 
@@ -178,12 +178,14 @@ X_crowd  = df_crowd[CROWD_FEATURES].fillna(0)
 y_crowd  = df_crowd["passengers_waiting"]
 
 model_crowd = XGBRegressor(
-    n_estimators=300, max_depth=5, learning_rate=0.05,
-    min_child_weight=3, random_state=42, n_jobs=-1
+    n_estimators=500, max_depth=6, learning_rate=0.05,
+    subsample=0.8, colsample_bytree=0.8,
+    min_child_weight=1, random_state=42, n_jobs=-1
 )
 
+kf = KFold(n_splits=5, shuffle=True, random_state=42)
 crowd_rmse_scores = []
-for fold, (train_idx, val_idx) in enumerate(tscv.split(X_crowd), 1):
+for fold, (train_idx, val_idx) in enumerate(kf.split(X_crowd), 1):
     X_tr, X_val = X_crowd.iloc[train_idx], X_crowd.iloc[val_idx]
     y_tr, y_val = y_crowd.iloc[train_idx], y_crowd.iloc[val_idx]
     model_crowd.fit(X_tr, y_tr, eval_set=[(X_val, y_val)], verbose=False)

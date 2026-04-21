@@ -33,15 +33,6 @@ LINE_COLORS: Dict[str, str] = {
     "L05": "#E74C3C",
 }
 
-# Mock Turkish stop name pools per stop_type (used when no real names available)
-_NAME_POOL: Dict[str, List[str]] = {
-    "terminal":    ["Terminal", "Garaj", "Meydan"],
-    "hospital":    ["Devlet Hastanesi", "Numune Hastanesi", "Sağlık Merkezi"],
-    "university":  ["Üniversite", "Kampüs", "Fakülte", "Yurt"],
-    "market":      ["Çarşı", "Pazar", "Alışveriş Merkezi"],
-    "residential": ["Mahalle", "Konutlar", "Siteler"],
-    "regular":     ["Durak"],
-}
 
 _SHAPE_CACHE: Dict[str, "RouteShape"] = {}
 
@@ -86,29 +77,6 @@ def _load_stops() -> pd.DataFrame:
         return pd.DataFrame()
     return pd.read_csv(path)
 
-
-def _make_stop_name(row: pd.Series, used: Dict[str, int]) -> str:
-    """Generate a readable Turkish stop name from stop_type."""
-    stop_type = str(row.get("stop_type", "regular"))
-    is_terminal = bool(row.get("is_terminal", False))
-    line_name = str(row.get("line_name", ""))
-    seq = int(row.get("stop_sequence", 0))
-
-    if is_terminal:
-        # Use the half of the line name that matches the direction
-        parts = [p.strip() for p in line_name.split("-")]
-        terminal_names = _NAME_POOL["terminal"]
-        side = parts[0] if seq <= 2 else (parts[-1] if len(parts) > 1 else parts[0])
-        pool_idx = used.get("terminal", 0)
-        suffix = terminal_names[pool_idx % len(terminal_names)]
-        used["terminal"] = pool_idx + 1
-        return f"{side} {suffix}"
-
-    pool = _NAME_POOL.get(stop_type, _NAME_POOL["regular"])
-    idx = used.get(stop_type, 0)
-    name = pool[idx % len(pool)]
-    used[stop_type] = idx + 1
-    return name
 
 
 def _osrm_route(
@@ -170,9 +138,7 @@ def _build_shape(line_id: str, df: pd.DataFrame) -> RouteShape:
     color = LINE_COLORS.get(line_id, "#607D8B")
     raw_coords = line_df[["latitude", "longitude"]].values.tolist()
 
-    # Generate mock Turkish names (one counter per stop_type to cycle pool)
-    used_counts: Dict[str, int] = {}
-    stop_names = [_make_stop_name(row, used_counts) for _, row in line_df.iterrows()]
+    stop_names = [str(row["stop_id"]) for _, row in line_df.iterrows()]
 
     # Polite delay between OSRM calls (not for cache hits)
     global _osrm_call_count
