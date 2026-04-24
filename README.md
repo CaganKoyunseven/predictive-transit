@@ -1,132 +1,119 @@
-# Predictive Transit — Synthetic Dataset
-## Anadolu Hackathon 2026 | Case 2
+# Predictive Transit
+## Anadolu Hackathon 2026 | Case 2 — Real-Time Bus Prediction
 
-### Overview
-This dataset simulates urban bus transit operations in Sivas, Turkey (March 2025).
-Designed to support real-time bus arrival prediction and stop crowd estimation models.
-Inspired by Yandex Shifts data structure (vehicle motion prediction + weather).
-
-- **Geographic scope**: Sivas city center, 39.60–39.80°N, 36.95–37.15°E
-- **Time period**: March 1–30, 2025
-- **Bus lines**: 5 lines (L01–L05), 62 stops total
-- **Total trips**: ~13,400 | **Stop arrival observations**: ~4,500
+**Team:** Ctrl-Alt-Defeat
+**Result:** 🥈 **6th in category · 14th overall**
+**Leaderboard:** https://dashboard.hackaton.sivas.edu.tr/leaderboard
 
 ---
 
-### Files
+### What We Built
 
-#### 1. `bus_stops.csv` — Static stop metadata (62 rows)
+A real-time web application for Sivas city buses that predicts arrival delays and stop crowding using machine learning, displayed on an interactive map.
 
-| Column | Description |
-|--------|-------------|
-| stop_id | Unique stop ID (STP-LXX-NN) |
-| line_id / line_name | Bus line identifier and name |
-| stop_sequence | Position on route (1-indexed) |
-| latitude / longitude | GPS coordinates |
-| stop_type | terminal / transfer_hub / university / hospital / market / residential / regular |
-| is_terminal | 1 if first or last stop on line |
-| is_transfer_hub | 1 if passengers can transfer lines |
-| distance_from_prev_km | Distance from previous stop (km) |
-| scheduled_travel_time_min | Planned travel time from previous stop (min) |
-| shelter_available | 1 if covered shelter at stop |
-| bench_available | 1 if seating is available |
-
-#### 2. `bus_trips.csv` — One row per scheduled bus run (13,440 rows)
-
-| Column | Description |
-|--------|-------------|
-| trip_id | Unique trip ID (TRP-XXXXX) |
-| line_id / line_name | Bus line |
-| date / day_of_week / is_weekend | Temporal metadata |
-| planned_departure | Scheduled first stop departure |
-| actual_departure | Real departure time |
-| departure_delay_min | Delay at route start (min) |
-| planned_duration_min | Total scheduled trip time |
-| actual_duration_min | Real trip duration |
-| total_delay_min | End-to-end delay (actual - planned) |
-| num_stops | Stops on this line |
-| weather_condition | clear / cloudy / rain / snow / fog / wind |
-| temperature_c | Air temperature (°C) |
-| precipitation_mm | Precipitation during trip (mm) |
-| wind_speed_kmh | Wind speed (km/h) |
-| humidity_pct | Relative humidity (%) |
-| traffic_level | low / moderate / high / congested |
-| speed_factor | Composite travel speed multiplier [0–1]; lower = slower |
-| bus_capacity | Total seats (60) |
-| avg_occupancy_pct | Average load during trip |
-
-#### 3. `stop_arrivals.csv` — Per-stop bus arrival records (~4,500 rows)
-**This is the primary prediction target table.**
-
-| Column | Description |
-|--------|-------------|
-| observation_id | Unique record ID |
-| trip_id / line_id / stop_id | Foreign keys |
-| stop_sequence / stop_type | Stop position and category |
-| date / day_of_week / hour_of_day / time_bucket | Temporal features |
-| planned_arrival | Scheduled arrival datetime |
-| actual_arrival | Real arrival datetime |
-| delay_min | Arrival delay in minutes (negative = early) |
-| is_delayed | 1 if delay_min > 2 minutes |
-| passengers_waiting | People at stop when bus arrives **[TARGET for crowd model]** |
-| passengers_boarding | Passengers who board |
-| passengers_alighting | Passengers who exit |
-| dwell_time_min | Time bus spends at stop |
-| cumulative_delay_min | Delay accumulated since trip start |
-| weather_condition / traffic_level / speed_factor | Conditions at observation time |
-| minutes_to_next_bus | Estimated gap to next bus on same line |
-
-#### 4. `passenger_flow.csv` — Aggregated crowd statistics (~3,500 rows)
-Pre-aggregated by stop × hour × day-of-week × weather. Useful for baseline features.
-
-| Column | Description |
-|--------|-------------|
-| stop_id / line_id / stop_type | Stop identifiers |
-| hour_of_day / day_of_week / is_weekend / time_bucket | Time grouping |
-| weather_condition | Weather category |
-| avg_passengers_waiting | Mean crowd at stop |
-| avg_passengers_boarding | Mean boardings per arrival |
-| avg_dwell_time_min | Mean dwell time |
-| sample_count | Observations in this group |
-| std_passengers_waiting | Crowd standard deviation |
-| max_passengers_waiting | Peak crowd observed |
-| crowding_level | empty / light / moderate / busy / crowded |
-
-#### 5. `weather_observations.csv` — Weather readings (300 records)
-
-| Column | Description |
-|--------|-------------|
-| obs_id / timestamp / latitude / longitude | When and where |
-| weather_condition | Category |
-| temperature_c / feels_like_c | Temperature (°C) |
-| precipitation_mm / precipitation_type | Rain or snow amount |
-| wind_speed_kmh / wind_direction_deg | Wind |
-| humidity_pct / pressure_hpa / visibility_km | Atmospheric conditions |
-| road_surface | dry / wet / icy / snow_covered |
-| transit_delay_risk | Composite weather-based delay risk [0–1] |
-| passenger_demand_multiplier | Weather-driven crowd boost factor |
+**Live at:** `http://<vm-ip>:8000`
 
 ---
 
-### Key Dataset Statistics
-| Metric | Value |
-|--------|-------|
-| Average arrival delay | 8.2 min |
-| % of stops with delay > 2 min | 66.3% |
-| Average passengers waiting | 34.2 |
-| Max passengers at a stop | 180 |
-| Bus lines | 5 |
-| Total trips | 13,440 |
+### ML Results
+
+| Model | Metric | Result | Target | Status |
+|-------|--------|--------|--------|--------|
+| Delay prediction (XGBoost) | MAE | **0.110 ± 0.072 min** | < 5 min | ✅ Met |
+| Crowd prediction (XGBoost) | RMSE | **7.475 ± 0.509 people** | < 8 people | ✅ Met |
+| Crowding classification (XGBoost) | Accuracy | **100%** | — | ✅ |
+| Prediction UI response | Latency | **< 100ms** | < 1s | ✅ Met |
 
 ---
 
-### Suggested ML Tasks
-1. **Arrival time prediction** — predict `delay_min` using weather + traffic + cumulative_delay + time features. **Metric: MAE**
-2. **Crowd estimation** — predict `passengers_waiting` at a stop. **Metric: RMSE**
-3. **Crowding classification** — predict `crowding_level` (multi-class: empty → crowded)
-4. **Real-time ETA** — end-to-end `minutes_to_next_bus` for the live map UI
+### Features
 
-### Evaluation Metrics (per case spec)
-- **MAE** for arrival time prediction
-- **RMSE** for number of passengers waiting
-- Interface must display forecast readable within 1 second (UX criterion)
+- **Delay & crowd prediction** — XGBoost models, real weather from Open-Meteo
+- **Live map** — 5 bus lines on real roads (OSRM), animated bus positions, stop markers
+- **Route congestion opacity** — polyline darkness reflects live delay + occupancy
+- **Stop & place search** — search by stop ID or location name, fly to stop
+- **Accessibility warning** — crowding alert for wheelchair/stroller users only
+- **Beat the Bus** — walking vs bus challenge with calorie estimate
+- **Crowd crowdsourcing** — Waze-style real feedback collection
+- **Weather badge** — live temperature + condition from Open-Meteo
+
+---
+
+### Quick Start
+
+```bash
+# Unzip and enter project
+cd predictive-transit
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Start server (frontend + backend on one port)
+python3 -m uvicorn backend.main:app --host 0.0.0.0 --port 8000
+```
+
+Open `http://localhost:8000` in your browser.
+
+---
+
+### Stack
+
+| Layer | Technologies |
+|-------|-------------|
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS, Leaflet |
+| Backend | FastAPI, Uvicorn, SQLite, SQLAlchemy |
+| ML | XGBoost, scikit-learn, pandas |
+| External APIs | Open-Meteo (weather), OSRM (road routing) |
+
+---
+
+### Dataset
+
+All data is **fully synthetic**, generated for Sivas March 2025.
+
+| File | Rows | Description |
+|------|------|-------------|
+| `bus_stops.csv` | 62 | 5 lines, 62 stops — coordinates, stop_type |
+| `bus_trips.csv` | 13,440 | Trip schedule — departure, delay, occupancy, weather |
+| `stop_arrivals.csv` | 4,478 | Per-stop arrival delay — delay_min, passengers_waiting |
+| `weather_observations.csv` | 300 | Hourly weather — transit_delay_risk, demand multiplier |
+| `passenger_flow.csv` | 3,568 | Hourly crowd stats — avg_passengers_waiting, crowding_level |
+
+---
+
+### Project Structure
+
+```
+predictive-transit/
+├── backend/
+│   ├── main.py               # FastAPI app, static file serving
+│   ├── routers/              # API endpoints
+│   └── ml/
+│       ├── train.py          # Model training
+│       ├── predict.py        # Inference helpers
+│       └── models/           # Trained .pkl files
+├── frontend/
+│   ├── src/                  # React source
+│   └── dist/                 # Built files (served by FastAPI)
+├── bus_stops.csv
+├── bus_trips.csv
+├── stop_arrivals.csv
+├── weather_observations.csv
+├── passenger_flow.csv
+├── requirements.txt
+└── PROJECT_REPORT.md         # Full technical report
+```
+
+---
+
+### API
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /api/predict` | Delay + crowd + crowding label prediction |
+| `GET /api/bus-positions` | Simulated live bus positions |
+| `GET /api/routes/all/shapes` | Route geometries (OSRM road-snapped) |
+| `GET /api/weather` | Live Sivas weather (Open-Meteo) |
+| `GET /api/stops/{id}/upcoming` | Upcoming buses for a stop |
+| `GET /health` | Service health + model status |
+| `GET /docs` | Swagger UI |
