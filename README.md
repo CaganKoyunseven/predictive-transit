@@ -9,7 +9,7 @@
 
 ### What We Built
 
-A real-time web application for Sivas city buses that predicts arrival delays and stop crowding using machine learning, displayed on an interactive map.
+A web application for Sivas city buses that predicts arrival delays and stop crowding using machine learning, displayed on an interactive map. Built on fully synthetic data generated for Sivas March 2025.
 
 **Live at:** `http://<vm-ip>:8000`
 
